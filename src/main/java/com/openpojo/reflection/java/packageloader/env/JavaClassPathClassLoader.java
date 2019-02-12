@@ -18,6 +18,8 @@
 
 package com.openpojo.reflection.java.packageloader.env;
 
+import java.io.File;
+import java.io.FilenameFilter;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Collections;
@@ -72,23 +74,47 @@ public class JavaClassPathClassLoader {
   }
 
   private void loadClassNames() {
-    for (String name : classPathPropertyNames) {
-      String envProperty = System.getProperty(name);
-      if (envProperty != null) {
-        String[] entries = envProperty.split(Java.CLASSPATH_DELIMITER);
-        for (String entry : entries) {
-          LoggerFactory.getLogger(this.getClass()).info("Loading classes from: {0}", entry);
+      for (String name : classPathPropertyNames) {
+        String envProperty = System.getProperty(name);
+        if (envProperty != null) {
+          String[] entries = envProperty.split(Java.CLASSPATH_DELIMITER);
+          for (String entry : entries) {
+            LoggerFactory.getLogger(this.getClass()).info("Loading classes from: {0}", entry);
 
-          JarFileReader jarFileReader = JarFileReader.getInstance(entry);
-          if (jarFileReader.isValid())
-            classNames.addAll(jarFileReader.getClassNames());
-          else
-            LoggerFactory.getLogger(this.getClass()).warn("Failed to load entries from: [{0}]", entry);
-        }
-      } else
-        LoggerFactory.getLogger(this.getClass()).warn("Failed to get value for environment variable: [{0}]", name);
+            JarFileReader jarFileReader = JarFileReader.getInstance(entry);
+            if (jarFileReader.isValid())
+              classNames.addAll(jarFileReader.getClassNames());
+            else {
+                if (entry.endsWith("classes")) {
+                   classNames.addAll(getFilesRecursively(new File(entry).listFiles()));
+                }
+                else
+                  LoggerFactory.getLogger(this.getClass()).warn("Failed to load entries from: [{0}]", entry);
+            }
+          }
+        } else
+          LoggerFactory.getLogger(this.getClass()).warn("Failed to get value for environment variable: [{0}]", name);
+      }
     }
-  }
+    
+    private static Set<String> getFilesRecursively(File[] files) {
+        Set<String> s = new HashSet<String>();
+        if (files == null) {
+            return s;
+        }
+        for (File file : files) {
+            if (file.isDirectory()) {
+                getFilesRecursively(file.listFiles(new FilenameFilter() {
+                    public boolean accept(File dir, String name) {
+                        return name.toLowerCase().endsWith(".class");
+                    }
+                }));
+            } else {
+                s.add(file.getAbsoluteFile().toString());
+            }
+        }
+        return s;
+    }
 
   public boolean hasPackage(String packageName) {
     for (String entry : classNames)
